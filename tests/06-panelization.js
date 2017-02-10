@@ -17,25 +17,29 @@ PCB.panelize(dx,dy, 10,5, panel);
 PCB.saveFile('panel.kicad_pcb', panel);
 
 // Custom panelization:
-// Sensible placement of the auxiliary origin marker woud have been nice...
+// Sensible placement of the auxiliary origin marker woud have been nice,
+// but using incremental transformations on 'tmp' will do nicely.
+// If you find this hard to grasp then try saving and inspecting the partials.
 
-//   Start with a single copy
+//   Start with a single copy, let's call it "top left".
 var panel = PCB.clone(pcb); 
 
-//   Add a rotated copy to the right
+//   Make a rotated copy to the right, i.e., rotate around the top-right,
+//   then move right another 2.54mm for clearance.
 var tmp = PCB.clone(pcb);
 PCB.transform(2.54, 0, 90, PCB.coord.topRight(tmp), tmp);
 PCB.join(panel, tmp);
 
-//   Add a couple more rotated copies below
-var tmp = PCB.clone(panel);
-PCB.transform(
-	0, // X displacement
-	PCB.size.width(pcb)-PCB.size.height(pcb)+2.54, // Y displacement
-	180, // Rotation
-	PCB.coord.fraction(.5,1,tmp), // Rotation reference (bottom-center)
-	tmp
-);
+//   tmp is still at the top-right, so to get a board on the bottom-right
+//   we rotate tmp around it's bottom-right corner then move down 2.54mm
+//   for clearance.
+PCB.transform(0, 2.54, 90, PCB.coord.bottomRight(tmp), tmp);
+PCB.join(panel, tmp);
+
+//   tmp is still at the bottom-right, so to get a board on the bottom-left
+//   we rotate tmp around it's bottom-left corner then move left 2.54mm
+//   for clearance.
+PCB.transform(-2.54, 0, 90, PCB.coord.bottomLeft(tmp), tmp);
 PCB.join(panel, tmp);
 
 // Repeat 4x4 grid
