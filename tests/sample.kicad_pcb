@@ -1,9 +1,9 @@
-(kicad_pcb (version 20170123) (host pcbnew no-vcs-found-7592~57~ubuntu16.04.1)
+(kicad_pcb (version 4) (host pcbnew 4.0.2+dfsg1-stable)
 
   (general
     (links 16)
     (no_connects 0)
-    (area 74.879999 21.430001 103.948572 61.165)
+    (area 68.230193 21.240193 103.948571 61.12)
     (thickness 1.6)
     (drawings 7)
     (tracks 30)
@@ -70,6 +70,7 @@
       (hpglpennumber 1)
       (hpglpenspeed 20)
       (hpglpendiameter 15)
+      (hpglpenoverlay 2)
       (psnegative false)
       (psa4output false)
       (plotreference true)

@@ -206,6 +206,34 @@ function removeByName(token_name, token) {
 	for (var i=0; i<token.length; ++i)
 		removeByName(token_name, token[i]);
 }
+function getFirstByPath(path, token) {
+	var ret = null;
+	onPath(path, token, function(t) {
+		if (ret == null) ret = t;
+	});
+	return ret;
+}
+function getFirstByName(name, token) {
+	var ret = null;
+	onAll(name, token, function(t) {
+		if (ret == null) ret = t;
+	});
+	return ret;
+}
+function getAllByPath(path, token) {
+	var ret = new Array();
+	onPath(path, token, function(t) {
+		ret[ret.length] = t;
+	});
+	return ret;
+}
+function getAllByName(name, token) {
+	var ret = new Array();
+	onAll(name, token, function(t) {
+		ret[ret.length] = t;
+	});
+	return ret;
+}
 
 function pathExists(target, token) {
 	var res = false;
@@ -239,7 +267,9 @@ function join(pcb1, pcb2) {
 		['kicad_pcb', 'gr_line'],
 		['kicad_pcb', 'gr_text'],
 		['kicad_pcb', 'segment'],
-		['kicad_pcb', 'zone']
+		['kicad_pcb', 'zone'],
+		['kicad_pcb', 'gr_arc'],
+		['kicad_pcb', 'gr_circle'],
 	];
 	
 	// Copy over
@@ -267,68 +297,85 @@ function panelize(dx, dy, nx, ny, pcb) {
 
 // Get coordinates from a PCB.
 // Edge.cuts layer considered
-var coord = new Object();
-coord.top = function (pcb) {
-	var top  = 1e99;
+
+// Run through a PCB seeking for points that may help identify how big it is
+// Call fcn([x,y]) on each point.
+function onPointsOfInterest(pcb, fcn) {
+	// Seek on gr_lines
 	onPath(['kicad_pcb', 'gr_line'], pcb, function(gr_line) {
 		if (!pathContains(['gr_line', 'layer'], 'Edge.Cuts', gr_line))
 			return;
-		onPath(['gr_line','start'], gr_line, function (start) {
-			if (start[2] < top)
-				top = start[2];
-		});
-		onPath(['gr_line','end'], gr_line, function (end) {
-			if (end[2] < top)
-				top = end[2];
-		});
+		
+		var start = getFirstByName('start', gr_line);
+		var end   = getFirstByName('end', gr_line);
+		
+		fcn(start.slice(1));
+		fcn(end.slice(1));
+	});
+	
+	// Seek on gr_circles
+	onPath(['kicad_pcb', 'gr_circle'], pcb, function(gr_circle) {
+		if (!pathContains(['gr_circle', 'layer'], 'Edge.Cuts', gr_circle))
+			return;
+		
+		var center = getFirstByName('center', gr_circle);
+		var end    = getFirstByName('end',    gr_circle);
+		var radius = Math.sqrt(Math.pow(end[2]-center[2],2) + Math.pow(end[1]-center[1],2));
+		
+		fcn([center[1]+radius, center[2]+radius]);
+		fcn([center[1]+radius, center[2]-radius]);
+		fcn([center[1]-radius, center[2]+radius]);
+		fcn([center[1]-radius, center[2]-radius]);
+	});
+	
+	// Seek on gr_arcs
+	onPath(['kicad_pcb', 'gr_arc'], pcb, function(gr_arc) {
+		if (!pathContains(['gr_arc', 'layer'], 'Edge.Cuts', gr_arc))
+			return;
+		
+		var start  = getFirstByName('start', gr_arc);
+		var end    = getFirstByName('end',   gr_arc);
+		var angle  = getFirstByName('angle', gr_arc);
+		
+		var radius = Math.sqrt(Math.pow(end[2]-start[2],2) + Math.pow(end[1]-start[1],2));
+		var theta0 = Math.atan2(end[2]-start[2], end[1]-start[1]);
+		var theta1 = theta0 + angle[1] * Math.PI / 180;
+		
+		// Analythic is hard, go brute force...
+		for (var i=0; i<512; ++i) {
+			var theta = theta0 + i/(512-1) * (theta1 - theta0);
+			
+			fcn([start[1] + radius * Math.cos(theta), start[2] - radius * Math.sin(theta)]);
+		}
+	});
+}
+
+var coord = new Object();
+coord.top = function (pcb) {
+	var top  = 1e99;
+	onPointsOfInterest(pcb, function(point) {
+		if (point[1] < top) top = point[1];
 	});
 	return top;
 }
 coord.left = function (pcb) {
 	var left = 1e99;
-	onPath(['kicad_pcb', 'gr_line'], pcb, function(gr_line) {
-		if (!pathContains(['gr_line', 'layer'], 'Edge.Cuts', gr_line))
-			return;
-		onPath(['gr_line','start'], gr_line, function (start) {
-			if (start[1] < left)
-				left = start[1];
-		});
-		onPath(['gr_line','end'], gr_line, function (end) {
-			if (end[1] < left)
-				left = end[1];
-		});
+	onPointsOfInterest(pcb, function(point) {
+		if (point[0] < left) left = point[0];
 	});
 	return left;
 }
 coord.bottom = function (pcb) {
 	var bottom  = 0;
-	onPath(['kicad_pcb', 'gr_line'], pcb, function(gr_line) {
-		if (!pathContains(['gr_line', 'layer'], 'Edge.Cuts', gr_line))
-			return;
-		onPath(['gr_line','start'], gr_line, function (start) {
-			if (start[2] > bottom)
-				bottom = start[2];
-		});
-		onPath(['gr_line','end'], gr_line, function (end) {
-			if (end[2] > bottom)
-				bottom = end[2];
-		});
+	onPointsOfInterest(pcb, function(point) {
+		if (point[1] > bottom) bottom = point[1];
 	});
 	return bottom;
 }
 coord.right = function (pcb) {
 	var right = 0;
-	onPath(['kicad_pcb', 'gr_line'], pcb, function(gr_line) {
-		if (!pathContains(['gr_line', 'layer'], 'Edge.Cuts', gr_line))
-			return;
-		onPath(['gr_line','start'], gr_line, function (start) {
-			if (start[1] > right)
-				right = start[1];
-		});
-		onPath(['gr_line','end'], gr_line, function (end) {
-			if (end[1] > right)
-				right = end[1];
-		});
+	onPointsOfInterest(pcb, function(point) {
+		if (point[0] > right) right = point[0];
 	});
 	return right;
 }
@@ -421,7 +468,11 @@ function transform(dx, dy, rot_deg, ref, pcb) {
 		[ 'kicad_pcb', 'segment', 'start' ],
 		[ 'kicad_pcb', 'segment', 'end' ],
 		[ 'kicad_pcb', 'zone', 'polygon', 'pts', 'xy' ],
-		[ 'kicad_pcb', 'zone', 'filled_polygon', 'pts', 'xy' ]
+		[ 'kicad_pcb', 'zone', 'filled_polygon', 'pts', 'xy' ],
+		[ 'kicad_pcb', 'gr_circle', 'center' ],
+		[ 'kicad_pcb', 'gr_circle', 'end' ],
+		[ 'kicad_pcb', 'gr_arc', 'start' ],
+		[ 'kicad_pcb', 'gr_arc', 'end' ]
 	];
 	
 	// Apply transformation function to data
@@ -434,13 +485,17 @@ function transform(dx, dy, rot_deg, ref, pcb) {
 
 module.exports = {
 	parse: parse,
+	stringify: stringify,
 	parseFile: parseFile,
 	saveFile: saveFile,
-	stringify: stringify,
 	onPath: onPath,
 	onAll: onAll,
 	pathExists: pathExists,
 	pathContains: pathContains,
+	getFirstByPath: getFirstByPath,
+	getFirstByName: getFirstByName,
+	getAllByPath: getAllByPath,
+	getAllByName: getAllByName,
 	indexOf: indexOf,
 	removeByPath: removeByPath,
 	removeByName: removeByName,
