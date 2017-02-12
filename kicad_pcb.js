@@ -125,11 +125,11 @@ function stringify(token) {
 }
 
 //
-function parseFile(name) {
+function readFileSync(name) {
 	return parse(require('fs').readFileSync(name));
 }
 
-function saveFile(name, pcb) {
+function writeFileSync(name, pcb) {
 	require('fs').writeFileSync(name, stringify(pcb));
 }
 
@@ -486,8 +486,8 @@ function transform(dx, dy, rot_deg, ref, pcb) {
 module.exports = {
 	parse: parse,
 	stringify: stringify,
-	parseFile: parseFile,
-	saveFile: saveFile,
+	readFileSync: readFileSync,
+	writeFileSync: writeFileSync,
 	onPath: onPath,
 	onAll: onAll,
 	pathExists: pathExists,

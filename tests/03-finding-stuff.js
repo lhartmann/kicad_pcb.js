@@ -5,7 +5,7 @@ var PCB = require('../kicad_pcb.js');
 var FS  = require('fs');
 
 // Load sample board.
-var pcb = PCB.parseFile("sample.kicad_pcb");
+var pcb = PCB.readFileSync("sample.kicad_pcb");
 
 // Iterate all modules by path
 PCB.onPath(['kicad_pcb', 'module'], pcb, (module) => {
